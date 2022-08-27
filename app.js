@@ -28,6 +28,9 @@ const networkSearched = mongoose.model('networkParts', networkPartSchema)
 var networkPart = [];
 for (let i = 1; i <= 255; i++) {
     for (let j = 1; j <= 255; j++) {
+        if (i <= 10 || (i == 192 && j == 168) || (i == 172)) {
+            continue;
+        }
         networkPart.push([i, j]);
     }
 }
@@ -36,14 +39,14 @@ async function nextScan() {
     randomSelection = networkPart[Math.floor(Math.random() * networkPart.length)]
 
     // Skip already searched
-    // var doc = await networkSearched.find({0: randomSelection[0], 1: randomSelection[1]})
-    // if (!doc) {
-    //     nextScan();
-    //     return;
-    // }
+    var doc = await networkSearched.find({0: randomSelection[0], 1: randomSelection[1]})
+    if (doc.length > 0) {
+        nextScan();
+        return;
+    }
 
     var ip = `${randomSelection.join(".")}.0.0/16`;
-    console.log(ip)
+    console.log(`Starting scan of ${ip}`)
 
     var scan = new Evilscan({
         target: ip,
@@ -54,7 +57,7 @@ async function nextScan() {
     })
 
     scan.on('result', data => {
-        console.log(data);
+        progressBar(data.ip);
         mongoIP.create(data)
     });
     
@@ -63,7 +66,8 @@ async function nextScan() {
     });
     
     scan.on('done', () => {
-        console.log(`Complete scan of network part ${randomSelection}`)
+        process.stdout.clearLine(0);
+        console.log(`Completed scan\n`)
         networkSearched.create({
             0: randomSelection[0],
             1: randomSelection[1],
@@ -73,7 +77,22 @@ async function nextScan() {
     });
 
     scan.run();
-    networkPart.splice(networkPart.indexOf(randomSelection), 1)
+    networkPart.splice(networkPart.indexOf(randomSelection), 1);
 }
 
 nextScan();
+
+
+function progressBar(latest) {
+    process.stdout.cursorTo(0);
+    progress = latest.split(".");
+
+    max = 255;
+    intervals = 50;
+    tracking = progress[2];
+
+    completed = Math.floor(tracking/(max/intervals));
+    notCompleted = intervals - completed;
+    percentage = ((tracking/(max))*100).toFixed(2);
+    process.stdout.write(`${"█".repeat(completed)}${"▒".repeat(notCompleted)}\t${percentage}%\t${latest}\r`);
+}
