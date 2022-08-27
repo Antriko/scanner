@@ -2,7 +2,7 @@ const Evilscan = require('evilscan');
 require('dotenv').config()
 
 const mongoose = require('mongoose');
-var mongoConn = process.env.DBPASS ? `mongodb://${process.env.DBUSER}:${process.env.DBPASS}@${process.env.DB}:${process.env.DBPORT}/?authMechanism=DEFAULT` : `mongodb://localhost:27017`;
+var mongoConn = process.env.DBPASS ? `mongodb://${process.env.DBUSER}:${process.env.DBPASS}@${process.env.DB}:${process.env.DBPORT}/scanner/?authMechanism=DEFAULT` : `mongodb://localhost:27017`;
 mongoose.connect(mongoConn, {useNewUrlParser: true, useUnifiedTopology: true});
 
 const ipSchema = new mongoose.Schema({
