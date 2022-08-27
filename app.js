@@ -3,7 +3,6 @@ require('dotenv').config()
 
 const mongoose = require('mongoose');
 var mongoConn = process.env.DBPASS ? `mongodb://${process.env.DBUSER}:${process.env.DBPASS}@${process.env.DB}:${process.env.DBPORT}/scanner?authSource=admin` : `mongodb://localhost:27017`;
-console.log(mongoConn)
 mongoose.connect(mongoConn, {useNewUrlParser: true, useUnifiedTopology: true});
 
 
