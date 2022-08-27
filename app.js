@@ -1,6 +1,4 @@
 const Evilscan = require('evilscan');
-var qjobs = require('qjobs');
-var q = new qjobs({maxConcurrency:2});
 
 const mongoose = require('mongoose');
 mongoose.connect('mongodb://localhost:27017/portScan', {useNewUrlParser: true, useUnifiedTopology: true});
