@@ -1,3 +1,5 @@
+// Scan for IPs that have port 25565 open
+
 const Evilscan = require('evilscan');
 require('dotenv').config()
 
