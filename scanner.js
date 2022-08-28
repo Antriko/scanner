@@ -8,19 +8,10 @@ var mongoConn = process.env.DBPASS ? `mongodb://${process.env.DBUSER}:${process.
 mongoose.connect(mongoConn, {useNewUrlParser: true, useUnifiedTopology: true});
 
 
-const ipSchema = new mongoose.Schema({
-    ip: String,
-    port: Number,
-    banner: String,
-    status: String
-});
+const ipSchema = require('./schemas').ipSchema;
 const mongoIP = mongoose.model('scans', ipSchema)
 
-const networkPartSchema = new mongoose.Schema({
-    0: Number,
-    1: Number,
-    date: Date,
-})
+const networkPartSchema = require('./schemas').networkPartSchema;
 const networkSearched = mongoose.model('networkParts', networkPartSchema)
 
 // Target: 1-255 . 1-255 . 0 . 0 / 16
@@ -63,6 +54,7 @@ async function nextScan() {
 
     scan.on('result', data => {
         progressBar(data.ip);
+        data.lastScan = null;
         mongoIP.create(data)
     });
     

@@ -4,6 +4,14 @@
 const net = require('net');
 const varint = require('varint');
 
+var EventEmitter = require('events');
+
+require('dotenv').config()
+const mongoose = require('mongoose');
+const { rejects } = require('assert');
+var mongoConn = process.env.DBPASS ? `mongodb://${process.env.DBUSER}:${process.env.DBPASS}@${process.env.DB}:${process.env.DBPORT}/scanner?authSource=admin` : `mongodb://localhost:27017`;
+mongoose.connect(mongoConn, {useNewUrlParser: true, useUnifiedTopology: true});
+
 var testIP = "92.23.213.127";
 var port = 25565;
 
@@ -35,7 +43,7 @@ function createHandshake(address, port) {
     // console.log(protocolBuffer, addressBuffer, portBuffer, nextStateBuffer)
     var packet = Buffer.concat([protocolBuffer, addressBuffer, portBuffer, nextStateBuffer])
     var IDPacket = createPacketWithID(0, packet);
-    console.log("Handshake packet", IDPacket);
+    // console.log("Handshake packet", IDPacket);
     return IDPacket
 }
 
@@ -53,42 +61,106 @@ function createPacketWithID(ID, data) {
         Buffer.from(varint.encode(ID)),
         data
     ])
-} 
+}
 
-var connection = net.connect(port, testIP, () => {
-    // Handshake
-    connection.write(createHandshake(testIP, port));
+const ipSchema = require('./schemas').ipSchema;
+const mongoIP = mongoose.model('scans', ipSchema);
 
-    // Ping
-    connection.write(createPacketWithID(0, Buffer.alloc(0)))
+const serverQuerySchema = require('./schemas').serverQuery;
+const serverQuery = mongoose.model('query', serverQuerySchema);
 
-    // Server information should be recieved
-});
 
-connection.on('data', (data) => {
-    // Decode data - https://wiki.vg/Server_List_Ping#Status_Request
-    // Packet ID    Name	        Field Type	    Notes
-    // 0x00         JSON Response	String	        See below; as with all strings this 
-    //                                              is prefixed by its length as a VarInt(2-byte max)
 
-    console.log('data', data)
+async function randomScan() {
+    var scan = new EventEmitter();
+    var randomSelection = await mongoIP.findOne({status: "open", lastScan: null});
+    if (!randomSelection) {
+        console.log("Finished")
+        return;
+    }
+    randomSelection.lastScan = Date.now();
+    await randomSelection.save();
+    console.log(`Scanning ${randomSelection.ip}`)
 
-    var packetLength = varint.decode(data);
-    var data = data.subarray(varint.encodingLength(packetLength))
-    console.log("PacketLength", packetLength)
+    var connection = net.connect(randomSelection.port, randomSelection.ip, () => {
+        // Handshake
+        connection.write(createHandshake(randomSelection.ip, randomSelection.port));
+    
+        // Ping
+        connection.write(createPacketWithID(0, Buffer.alloc(0)))
+        // Server information should be recieved
+    });
 
-    var packetID = varint.decode(data)
-    var data = data.subarray(varint.encodingLength(packetID))
-    console.log("PacketID", packetID)
+    connection.on('data', async (data) => {
+        // Decode data - https://wiki.vg/Server_List_Ping#Status_Request
+        // Packet ID    Name	        Field Type	    Notes
+        // 0x00         JSON Response	String	        See below; as with all strings this 
+        //                                              is prefixed by its length as a VarInt(2-byte max)
+    
+        console.log('data', data)
 
-    var fieldName = varint.decode(data);
-    var data = data.subarray(varint.encodingLength(fieldName))
-    console.log("FieldName", fieldName)
+        try {
+            var packetLength = varint.decode(data);
+            var data = data.subarray(varint.encodingLength(packetLength))
+            console.log("PacketLength", packetLength)
+    
+            var packetID = varint.decode(data)
+            var data = data.subarray(varint.encodingLength(packetID))
+            console.log("PacketID", packetID)
+            
+            var fieldName = varint.decode(data);
+            var data = data.subarray(varint.encodingLength(fieldName))
+            console.log("FieldName", fieldName)
+            
+            // Get actual server data
+            var data = JSON.parse(data);
 
-    // Get actual server data
-    var data = JSON.parse(data);
-})
+            scan.emit('success', data)
+        } catch(e) {
+            console.log("catch err", e);
+            // var doc = await serverQuery.findOne({ip: randomSelection.ip})
+            // if (!doc) {
+            //     serverQuery.create({
+            //         ip: randomSelection.ip,
+            //         successful: false,
+            //         date: Date.now()
+            //     })
+            // }
 
-connection.on('close', () => {
-    console.log('conn closed')
-})
+            scan.emit('error');
+            scan.emit('nextScan');
+        }
+    })
+
+    connection.on('error', async (err) => {
+        scan.emit('error');
+        scan.emit('nextScan');
+    })
+
+    scan.on('success', async (data) => {
+        console.log("Success SCAN")
+        await serverQuery.create({
+            ip: randomSelection.ip,
+            successful: true,
+            data: data,
+            date: Date.now()
+        })
+        scan.emit('nextScan');
+    })
+
+    scan.on('error', async () => {
+        console.log("Error SCAN")
+        serverQuery.create({
+            ip: randomSelection.ip,
+            successful: false,
+            date: Date.now()
+        })
+    })
+
+    scan.once('nextScan', () => {
+        console.log("Next SCAN")
+        randomScan();
+    })
+}
+
+randomScan();
