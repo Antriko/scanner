@@ -117,24 +117,12 @@ async function randomScan() {
 
             scan.emit('success', data)
         } catch(e) {
-            console.log("catch err", e);
-            // var doc = await serverQuery.findOne({ip: randomSelection.ip})
-            // if (!doc) {
-            //     serverQuery.create({
-            //         ip: randomSelection.ip,
-            //         successful: false,
-            //         date: Date.now()
-            //     })
-            // }
-
             scan.emit('error');
-            scan.emit('nextScan');
         }
     })
 
     connection.on('error', async (err) => {
         scan.emit('error');
-        scan.emit('nextScan');
     })
 
     scan.on('success', async (data) => {
@@ -155,12 +143,15 @@ async function randomScan() {
             successful: false,
             date: Date.now()
         })
+        scan.emit('nextScan');
     })
 
     scan.once('nextScan', () => {
-        console.log("Next SCAN")
         randomScan();
     })
 }
 
-randomScan();
+var scanAmount = 5;
+for (let i = 0; i < scanAmount; i++) {
+    randomScan();
+}
