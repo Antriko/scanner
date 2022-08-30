@@ -122,6 +122,7 @@ async function randomScan() {
 
             scan.emit('success', data)
         } catch(e) {
+            // console.log(randomSelection.ip, e);
             scan.emit('error');
         }
     })
@@ -168,8 +169,5 @@ async function randomScan() {
 
 var scanAmount = 5;
 for (let i = 0; i < scanAmount; i++) {
-    setTimeout(() => {
-        console.log(`Starting scan ${i}`)
-        randomScan()
-    }, 500*i);   // Delay between each one
+    randomScan()
 }
