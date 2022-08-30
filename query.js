@@ -168,9 +168,8 @@ async function randomScan() {
 
 var scanAmount = 5;
 for (let i = 0; i < scanAmount; i++) {
-    // randomScan();
     setTimeout(() => {
         console.log(`Starting scan ${i}`)
         randomScan()
-    }, 10000*i);   // Delay between each one to avoid duplicate search
+    }, 500*i);   // Delay between each one
 }

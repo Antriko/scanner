@@ -20,6 +20,8 @@ const networkSearched = mongoose.model('networkParts', networkPartSchema)
 // Scan through entirety of each network part
 // 65025 results per network part
 
+const saveAll = false;
+
 // 1 - 255, 1 - 255
 var networkPart = [];
 for (let i = 1; i <= 255; i++) {
@@ -55,7 +57,9 @@ async function nextScan() {
     scan.on('result', data => {
         progressBar(data.ip);
         data.lastScan = null;
-        mongoIP.create(data)
+        if (saveAll || data.status == "open") {
+            mongoIP.create(data)
+        }
     });
     
     scan.on('error', err => {
