@@ -79,8 +79,6 @@ async function randomScan() {
         console.log("Finished")
         return;
     }
-    // randomSelection.lastScan = Date.now();
-    // await randomSelection.save();
     console.log(`Scanning ${randomSelection.ip}`)
 
     var connection = net.connect(randomSelection.port, randomSelection.ip, () => {
