@@ -73,13 +73,14 @@ const serverQuery = mongoose.model('query', serverQuerySchema);
 
 async function randomScan() {
     var scan = new EventEmitter();
-    var randomSelection = await mongoIP.findOne({status: "open", lastScan: null});
+    var randomSelection = await mongoIP.findOneAndUpdate({status: "open", lastScan: null}, {lastScan: Date.now()});
+    // var randomSelection = await mongoIP.findOne({ip: "92.23.213.127"}); // Test case
     if (!randomSelection) {
         console.log("Finished")
         return;
     }
-    randomSelection.lastScan = Date.now();
-    await randomSelection.save();
+    // randomSelection.lastScan = Date.now();
+    // await randomSelection.save();
     console.log(`Scanning ${randomSelection.ip}`)
 
     var connection = net.connect(randomSelection.port, randomSelection.ip, () => {
@@ -89,6 +90,12 @@ async function randomScan() {
         // Ping
         connection.write(createPacketWithID(0, Buffer.alloc(0)))
         // Server information should be recieved
+
+        // Wait timeout and if nothing is recieved, then just move on to next
+        setTimeout(() => {
+            scan.emit('timeout')
+            connection.end();
+        }, 4000);   // 4 seconds
     });
 
     connection.on('data', async (data) => {
@@ -121,12 +128,12 @@ async function randomScan() {
         }
     })
 
-    connection.on('error', async (err) => {
+    connection.on('error', (err) => {
         scan.emit('error');
     })
 
     scan.on('success', async (data) => {
-        console.log("Success SCAN")
+        console.log(`Success SCAN\t${randomSelection.ip}`)
         await serverQuery.create({
             ip: randomSelection.ip,
             successful: true,
@@ -137,8 +144,18 @@ async function randomScan() {
     })
 
     scan.on('error', async () => {
-        console.log("Error SCAN")
-        serverQuery.create({
+        console.log(`Error SCAN\t${randomSelection.ip}`)
+        await serverQuery.create({
+            ip: randomSelection.ip,
+            successful: false,
+            date: Date.now()
+        })
+        scan.emit('nextScan');
+    })
+
+    scan.on('timeout', async () => {
+        console.log(`Timeout SCAN\t${randomSelection.ip}`)
+        await serverQuery.create({
             ip: randomSelection.ip,
             successful: false,
             date: Date.now()
@@ -153,5 +170,9 @@ async function randomScan() {
 
 var scanAmount = 5;
 for (let i = 0; i < scanAmount; i++) {
-    randomScan();
+    // randomScan();
+    setTimeout(() => {
+        console.log(`Starting scan ${i}`)
+        randomScan()
+    }, 10000*i);   // Delay between each one to avoid duplicate search
 }
