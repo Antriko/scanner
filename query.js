@@ -7,8 +7,9 @@ const varint = require('varint');
 var EventEmitter = require('events');
 
 require('dotenv').config()
+var moment = require('moment');
 const mongoose = require('mongoose');
-const { rejects } = require('assert');
+const { min } = require('moment');
 var mongoConn = process.env.DBPASS ? `mongodb://${process.env.DBUSER}:${process.env.DBPASS}@${process.env.DB}:${process.env.DBPORT}/scanner?authSource=admin` : `mongodb://localhost:27017`;
 mongoose.connect(mongoConn, {useNewUrlParser: true, useUnifiedTopology: true});
 
@@ -72,18 +73,34 @@ const serverQuery = mongoose.model('query', serverQuerySchema);
 
 
 async function randomScan() {
-    var scan = new EventEmitter();
     var randomSelection = await mongoIP.findOneAndUpdate({status: "open", lastScan: null}, {lastScan: Date.now()});
-    // var randomSelection = await mongoIP.findOne({ip: "92.23.213.127"}); // Test case
+    // var randomSelection = await mongoIP.findOne({ip: testIP}); // Test case
     if (!randomSelection) {
         console.log("Finished")
         return;
     }
-    console.log(`Scanning ${randomSelection.ip}`)
+    queryScan(randomSelection.ip, randomSelection.port, randomScan)
+}
 
-    var connection = net.connect(randomSelection.port, randomSelection.ip, () => {
+async function rescan() {
+    var date = Date.now();
+    var minutes = 30;    // How old of records to update
+    var newDate = new Date(date - minutes * (60 * 1000))
+    var server = await serverQuery.findOneAndUpdate({successful:true, date:{$lt: newDate}}, {date: Date.now()});
+    if (!server) {
+        console.log("Finished")
+        return;
+    }
+    queryScan(server.ip, server.port, rescan)
+}
+
+
+function queryScan(serverIP, serverPort, recursionFunc) {
+    var scan = new EventEmitter();
+    console.log(`Scanning ${serverIP}`);
+    var connection = net.connect(serverPort ? serverPort : port, serverIP, () => {
         // Handshake
-        connection.write(createHandshake(randomSelection.ip, randomSelection.port));
+        connection.write(createHandshake(serverIP, serverPort));
     
         // Ping
         connection.write(createPacketWithID(0, Buffer.alloc(0)))
@@ -102,7 +119,7 @@ async function randomScan() {
         // 0x00         JSON Response	String	        See below; as with all strings this 
         //                                              is prefixed by its length as a VarInt(2-byte max)
     
-        console.log('data', data)
+        // console.log('data', data)
 
         try {
             var packetLength = varint.decode(data);
@@ -122,7 +139,7 @@ async function randomScan() {
 
             scan.emit('success', data)
         } catch(e) {
-            // console.log(randomSelection.ip, e);
+            // console.log(serverIP, e);
             scan.emit('error');
         }
     })
@@ -132,9 +149,15 @@ async function randomScan() {
     })
 
     scan.on('success', async (data) => {
-        console.log(`Success SCAN\t${randomSelection.ip}`)
+        console.log(`Success SCAN\t${serverIP}`)
+
+        var didUpdate = await serverQuery.findOneAndUpdate({ip: serverIP}, {
+            data: data
+        })
+        if (didUpdate) return;
+
         await serverQuery.create({
-            ip: randomSelection.ip,
+            ip: serverIP,
             successful: true,
             data: data,
             date: Date.now()
@@ -143,9 +166,9 @@ async function randomScan() {
     })
 
     scan.on('error', async () => {
-        console.log(`Error SCAN\t${randomSelection.ip}`)
+        console.log(`Error SCAN\t${serverIP}`)
         await serverQuery.create({
-            ip: randomSelection.ip,
+            ip: serverIP,
             successful: false,
             date: Date.now()
         })
@@ -153,9 +176,9 @@ async function randomScan() {
     })
 
     scan.on('timeout', async () => {
-        console.log(`Timeout SCAN\t${randomSelection.ip}`)
+        console.log(`Timeout SCAN\t${serverIP}`)
         await serverQuery.create({
-            ip: randomSelection.ip,
+            ip: serverIP,
             successful: false,
             date: Date.now()
         })
@@ -163,11 +186,12 @@ async function randomScan() {
     })
 
     scan.once('nextScan', () => {
-        randomScan();
+        recursionFunc();
     })
 }
 
-var scanAmount = 5;
+var scanAmount = 40;
 for (let i = 0; i < scanAmount; i++) {
+    // rescan()
     randomScan()
 }
