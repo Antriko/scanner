@@ -7,9 +7,7 @@ const varint = require('varint');
 var EventEmitter = require('events');
 
 require('dotenv').config()
-var moment = require('moment');
 const mongoose = require('mongoose');
-const { min } = require('moment');
 var mongoConn = process.env.DBPASS ? `mongodb://${process.env.DBUSER}:${process.env.DBPASS}@${process.env.DB}:${process.env.DBPORT}/scanner?authSource=admin` : `mongodb://localhost:27017`;
 mongoose.connect(mongoConn, {useNewUrlParser: true, useUnifiedTopology: true});
 
@@ -154,6 +152,7 @@ function queryScan(serverIP, serverPort, recursionFunc) {
         var didUpdate = await serverQuery.findOneAndUpdate({ip: serverIP}, {
             data: data
         })
+        scan.emit('nextScan');
         if (didUpdate) return;
 
         await serverQuery.create({
@@ -162,7 +161,6 @@ function queryScan(serverIP, serverPort, recursionFunc) {
             data: data,
             date: Date.now()
         })
-        scan.emit('nextScan');
     })
 
     scan.on('error', async () => {
@@ -190,8 +188,46 @@ function queryScan(serverIP, serverPort, recursionFunc) {
     })
 }
 
-var scanAmount = 40;
-for (let i = 0; i < scanAmount; i++) {
-    // rescan()
-    randomScan()
+
+const inquirer = require('inquirer');
+
+function prompt() {
+    var prompt1 = 'What type of scan?'
+    var prompt2 = 'How many active scans? Limit 100'
+
+    inquirer.prompt([
+        {
+            type: 'list',
+            name: prompt1,
+            choices: [
+                'Rescan',
+                'New scans'
+            ]
+        },
+        {
+            type: 'number',
+            name: prompt2,
+        }
+    ])
+    .then(ans => {
+        if (ans[prompt2] == NaN) {
+            console.log('Please enter a number')
+            prompt();
+            return;
+        }
+        if (ans[prompt2] > 100) {
+            ans[prompt2] = 100;
+        }
+        for (let i = 0; i < ans[prompt2]; i++) {
+            switch (ans[prompt1]) {
+                case 'Rescan':
+                    rescan()
+                    break;
+                    case 'New scans':
+                    randomScan()
+                    break;
+                }
+            }
+        })
 }
+prompt();
