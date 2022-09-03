@@ -122,15 +122,15 @@ function queryScan(serverIP, serverPort, recursionFunc) {
         try {
             var packetLength = varint.decode(data);
             var data = data.subarray(varint.encodingLength(packetLength))
-            console.log("PacketLength", packetLength)
+            // console.log("PacketLength", packetLength)
     
             var packetID = varint.decode(data)
             var data = data.subarray(varint.encodingLength(packetID))
-            console.log("PacketID", packetID)
+            // console.log("PacketID", packetID)
             
             var fieldName = varint.decode(data);
             var data = data.subarray(varint.encodingLength(fieldName))
-            console.log("FieldName", fieldName)
+            // console.log("FieldName", fieldName)
             
             // Get actual server data
             var data = JSON.parse(data);
@@ -148,11 +148,14 @@ function queryScan(serverIP, serverPort, recursionFunc) {
 
     scan.on('success', async (data) => {
         console.log(`Success SCAN\t${serverIP}`)
-
-        var didUpdate = await serverQuery.findOneAndUpdate({ip: serverIP}, {
-            data: data
-        })
         scan.emit('nextScan');
+
+        // Don't create duplicate entries if rescanning
+        var didUpdate = await serverQuery.findOneAndUpdate({ip: serverIP}, {
+            successful: true,
+            data: data,
+            date: Date.now()
+        })
         if (didUpdate) return;
 
         await serverQuery.create({
@@ -165,12 +168,22 @@ function queryScan(serverIP, serverPort, recursionFunc) {
 
     scan.on('error', async () => {
         console.log(`Error SCAN\t${serverIP}`)
+        scan.emit('nextScan');
+
+        // Don't create duplicate entries if rescanning
+        // Data would still persist if rescanning and success turned from true to false
+        // data: null - if want to remove old data
+        var didUpdate = await serverQuery.findOneAndUpdate({ip: serverIP}, {
+            successful: false,
+            date: Date.now()
+        })
+        if (didUpdate) return;
+
         await serverQuery.create({
             ip: serverIP,
             successful: false,
             date: Date.now()
         })
-        scan.emit('nextScan');
     })
 
     scan.on('timeout', async () => {
@@ -200,8 +213,8 @@ function prompt() {
             type: 'list',
             name: prompt1,
             choices: [
+                'New scans',
                 'Rescan',
-                'New scans'
             ]
         },
         {
