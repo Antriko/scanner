@@ -8,10 +8,11 @@ var EventEmitter = require('events');
 
 require('dotenv').config()
 const mongoose = require('mongoose');
-var mongoConn = process.env.DBPASS ? `mongodb://${process.env.DBUSER}:${process.env.DBPASS}@${process.env.DB}:${process.env.DBPORT}/scanner?authSource=admin` : `mongodb://localhost:27017`;
+var mongoConn = process.env.DBPASS ? `mongodb://${process.env.DBUSER}:${process.env.DBPASS}@${process.env.DB}:${process.env.DBPORT}/scanner?authSource=admin` : `mongodb://localhost:27017/scanner`;
+mongoose.set('strictQuery', false);
 mongoose.connect(mongoConn, {useNewUrlParser: true, useUnifiedTopology: true});
 
-var testIP = "92.23.213.127";
+var testIP = "hypixel.net";
 var port = 25565;
 
 // Handshake needed
@@ -71,6 +72,8 @@ const serverQuery = mongoose.model('query', serverQuerySchema);
 
 
 async function randomScan() {
+    // queryScan("hypixel.net", 25565, randomScan)
+
     var randomSelection = await mongoIP.findOneAndUpdate({status: "open", lastScan: null}, {lastScan: Date.now()});
     // var randomSelection = await mongoIP.findOne({ip: testIP}); // Test case
     if (!randomSelection) {
@@ -143,7 +146,7 @@ function queryScan(serverIP, serverPort, recursionFunc) {
     })
 
     connection.on('error', (err) => {
-        scan.emit('error');
+        scan.emit('error', err);
     })
 
     scan.on('success', async (data) => {
@@ -166,7 +169,7 @@ function queryScan(serverIP, serverPort, recursionFunc) {
         })
     })
 
-    scan.on('error', async () => {
+    scan.on('error', async err => {
         console.log(`Error SCAN\t${serverIP}`)
         scan.emit('nextScan');
 
@@ -223,7 +226,7 @@ function prompt() {
         }
     ])
     .then(ans => {
-        if (ans[prompt2] == NaN) {
+        if (isNaN(ans[prompt2])) {
             console.log('Please enter a number')
             prompt();
             return;

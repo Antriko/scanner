@@ -4,9 +4,9 @@ const Evilscan = require('evilscan');
 require('dotenv').config()
 
 const mongoose = require('mongoose');
-var mongoConn = process.env.DBPASS ? `mongodb://${process.env.DBUSER}:${process.env.DBPASS}@${process.env.DB}:${process.env.DBPORT}/scanner?authSource=admin` : `mongodb://localhost:27017`;
+var mongoConn = process.env.DBPASS ? `mongodb://${process.env.DBUSER}:${process.env.DBPASS}@${process.env.DB}:${process.env.DBPORT}/scanner?authSource=admin` : `mongodb://localhost:27017/scanner`;
+mongoose.set('strictQuery', false);
 mongoose.connect(mongoConn, {useNewUrlParser: true, useUnifiedTopology: true});
-
 
 const ipSchema = require('./schemas').ipSchema;
 const mongoIP = mongoose.model('scans', ipSchema)
@@ -20,7 +20,10 @@ const networkSearched = mongoose.model('networkParts', networkPartSchema)
 // Scan through entirety of each network part
 // 65025 results per network part
 
+
+// Configurable
 const saveAll = false;
+const timeout = 2000;
 
 // 1 - 255, 1 - 255
 var networkPart = [];
@@ -51,7 +54,7 @@ async function nextScan() {
         port:'25565',
         status:'TROU', // Timeout, Refused, Open, Unreachable
         banner: true,
-        timeout: 4000
+        timeout: timeout,
     })
 
     scan.on('result', data => {
